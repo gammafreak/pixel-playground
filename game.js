@@ -7,7 +7,8 @@ const THEME = {
 // RULES: Speeds are in Canvas pixels per second.
 const RULES = {
   playerSpeed: 270, hazardSpeed: 115, speedPerLevel: 22,
-  maxHazardSpeed: 235, pointsPerLevel: 5, maxHazards: 8
+  maxHazardSpeed: 235, pointsPerLevel: 5, maxHazards: 8,
+  portalWidth: 144
 };
 
 const canvas = document.querySelector("#arena");
@@ -106,8 +107,26 @@ function placeCollectible() {
   collectible = openSpot(22, blockers, 20) ?? openSpot(22, blockers);
 }
 
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
+function moveWithinWalls(object, dx, dy) {
+  object.x += dx;
+  object.y += dy;
+  const edge = object.size / 2;
+  const fitsOpening = (position, length) =>
+    Math.abs(position - length / 2) <= RULES.portalWidth / 2 - edge;
+
+  for (const [axis, other, length, otherLength, velocity] of [
+    ["x", "y", width, height, "dx"],
+    ["y", "x", height, width, "dy"]
+  ]) {
+    if (object[axis] >= edge && object[axis] <= length - edge) continue;
+    if (fitsOpening(object[other], otherLength)) {
+      // Preserve the distance travelled beyond the edge when wrapping.
+      object[axis] += object[axis] < edge ? length - object.size : -(length - object.size);
+    } else {
+      object[axis] = Math.max(edge, Math.min(length - edge, object[axis]));
+      if (velocity in object) object[velocity] *= -1;
+    }
+  }
 }
 
 function movePlayer(dt) {
@@ -116,21 +135,13 @@ function movePlayer(dt) {
   const dy = Number(held("arrowdown") || held("s")) - Number(held("arrowup") || held("w"));
   // Normalize so moving diagonally is just as fast.
   const distance = RULES.playerSpeed * dt / (Math.hypot(dx, dy) || 1);
-  const edge = player.size / 2;
-  player.x = clamp(player.x + dx * distance, edge, width - edge);
-  player.y = clamp(player.y + dy * distance, edge, height - edge);
+  moveWithinWalls(player, dx * distance, dy * distance);
 }
 
 function moveHazards(dt) {
   const speed = Math.min(RULES.maxHazardSpeed, RULES.hazardSpeed + (level - 1) * RULES.speedPerLevel);
   for (const hazard of hazards) {
-    const edge = hazard.size / 2;
-    hazard.x += hazard.dx * speed * dt;
-    hazard.y += hazard.dy * speed * dt;
-    if (hazard.x < edge || hazard.x > width - edge) hazard.dx *= -1;
-    if (hazard.y < edge || hazard.y > height - edge) hazard.dy *= -1;
-    hazard.x = clamp(hazard.x, edge, width - edge);
-    hazard.y = clamp(hazard.y, edge, height - edge);
+    moveWithinWalls(hazard, hazard.dx * speed * dt, hazard.dy * speed * dt);
   }
 }
 
@@ -166,12 +177,36 @@ function drawSquare(object, color) {
   ctx.fillRect(object.x - half, object.y - half, object.size, object.size);
 }
 
+function drawWalls() {
+  const thickness = 6;
+  const horizontalGap = (width - RULES.portalWidth) / 2;
+  const verticalGap = (height - RULES.portalWidth) / 2;
+  ctx.fillStyle = "#ff9f43";
+  for (const y of [0, height - thickness]) {
+    ctx.fillRect(0, y, horizontalGap, thickness);
+    ctx.fillRect(width - horizontalGap, y, horizontalGap, thickness);
+  }
+  for (const x of [0, width - thickness]) {
+    ctx.fillRect(x, 0, thickness, verticalGap);
+    ctx.fillRect(x, height - verticalGap, thickness, verticalGap);
+  }
+  // Green posts mark the openings that connect opposite sides.
+  ctx.fillStyle = THEME.player;
+  for (const y of [0, height - 12]) {
+    for (const x of [horizontalGap, width - horizontalGap - 4]) ctx.fillRect(x, y, 4, 12);
+  }
+  for (const x of [0, width - 12]) {
+    for (const y of [verticalGap, height - verticalGap - 4]) ctx.fillRect(x, y, 12, 4);
+  }
+}
+
 function draw() {
   ctx.fillStyle = THEME.background;
   ctx.fillRect(0, 0, width, height);
   ctx.fillStyle = THEME.grid;
   for (let x = 0; x < width; x += 24) ctx.fillRect(x, 0, 1, height);
   for (let y = 0; y < height; y += 24) ctx.fillRect(0, y, width, 1);
+  drawWalls();
 
   if (collectible) {
     ctx.save();

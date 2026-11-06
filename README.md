@@ -4,6 +4,8 @@
 
 Collect sparks, dodge moving drones, and beat your best score. Every five sparks adds a level. Drone speed and count rise up to the limits in `RULES`.
 
+The arena has solid wall sections and an opening centered on each side, marked by green posts. Cross an opening to appear at the opposite side, like classic Snake. Solid sections stop the player and bounce drones; drones can also travel through the openings. Adjust `RULES.portalWidth` to change the opening size.
+
 ## Play locally
 
 1. Extract the ZIP. Keep its folders together.
